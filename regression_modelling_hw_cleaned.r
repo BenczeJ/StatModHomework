@@ -1,5 +1,5 @@
 df <- read.csv("AmesHousing.csv")
-n <- nrow(df) # total number of variables -> 2930
+n <- nrow(df) # total number of observations -> 2930
 #----------------------------------------------------------------------------------------------------
 # VARIABLE SELECTION
 # We have too many variables in the dataset, we have to select ~10 

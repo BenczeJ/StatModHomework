@@ -383,3 +383,87 @@ summary(fifth_model_gls)
 
 
 
+
+
+
+#------------------------------------------------------------------------------------
+# Visulatizations for the paper
+# Neighbourhood coeffs
+library(ggplot2)
+library(dplyr)
+
+# Extract coefficients
+coefs <- coef(fifth_model_gls)
+
+# Filter Neighborhood main effects
+neigh_coefs <- coefs[grepl("^Neighborhood", names(coefs))]
+
+# Create dataframe
+df_neigh <- data.frame(
+  term = names(neigh_coefs),
+  estimate = as.numeric(neigh_coefs)
+)
+
+# Clean names
+df_neigh$term <- gsub("Neighborhood", "", df_neigh$term)
+
+# Sort
+df_neigh <- df_neigh %>% arrange(estimate)
+
+# Plot
+ggplot(df_neigh, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_point(aes(color = term), size = 3) +
+  labs(title = "Neighborhood Coefficients (GLS Model)",
+       x = "Neighborhood",
+       y = "Coefficient") +
+  theme_minimal() +
+  coord_flip()
+
+# interaction coefs
+# Filter interaction terms
+inter_coefs <- coefs[grepl("log\\(Gr.Liv.Area\\):Neighborhood", names(coefs))]
+
+# Create dataframe
+df_inter <- data.frame(
+  term = names(inter_coefs),
+  estimate = as.numeric(inter_coefs)
+)
+
+# Clean names
+df_inter$term <- gsub("log\\(Gr.Liv.Area\\):Neighborhood", "", df_inter$term)
+
+# Sort
+df_inter <- df_inter %>% arrange(estimate)
+
+# Plot
+ggplot(df_inter, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_point(aes(color = term), size = 3) +
+  labs(title = "Interaction Coefficients: log(Gr.Liv.Area) × Neighborhood",
+       x = "Neighborhood",
+       y = "Interaction Coefficient") +
+  theme_minimal() +
+  coord_flip()
+
+# Exterior quality
+coef_df_ext <- as.data.frame(c("Average", "Good", "Excellent")) 
+colnames(coef_df_ext) <- c("external_quality")
+coef_df_ext$coeffs <- c(fifth_model_gls$coefficients["Exter.QualTA"], 
+                        fifth_model_gls$coefficients["Exter.QualGd"],
+                        fifth_model_gls$coefficients["Exter.QualEx"])
+coef_df_ext$external_quality <- as.factor(coef_df_ext$external_quality)
+coef_df_ext$external_quality <- relevel(coef_df_ext$external_quality, "Good")
+coef_df_ext$external_quality <- relevel(coef_df_ext$external_quality, "Average")
+ggplot(coef_df_ext, aes(x=external_quality, y=coeffs, color = external_quality)) + 
+  geom_point(size = 3) + stat_smooth(method=lm)
+
+# Kitchen quality
+coef_df_kit <- as.data.frame(c("Average", "Good", "Excellent")) 
+colnames(coef_df_kit) <- c("kitchen_quality")
+coef_df_kit$coeffs <- c(fifth_model_gls$coefficients["Kitchen.QualTA"], 
+                        fifth_model_gls$coefficients["Kitchen.QualGd"],
+                        fifth_model_gls$coefficients["Kitchen.QualEx"])
+coef_df_kit$kitchen_quality <- as.factor(coef_df_kit$kitchen_quality)
+coef_df_kit$kitchen_quality <- relevel(coef_df_kit$kitchen_quality, "Good")
+coef_df_kit$kitchen_quality <- relevel(coef_df_kit$kitchen_quality, "Average")
+ggplot(coef_df_kit, aes(x=kitchen_quality, y=coeffs, color = kitchen_quality)) + 
+  geom_point(size = 3) + geom_smooth(method=lm)

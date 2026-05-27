@@ -1,6 +1,48 @@
 df <- read.csv("AmesHousing.csv")
 n <- nrow(df)
 ncol(df)  # total number of variables -> 82
+#---------------------------------------------------------------------------------------------------
+# Descriptive Statistics visualizations (for paper)
+numeric_df = df[, c(
+  "SalePrice",
+  "Gr.Liv.Area",
+  "X1st.Flr.SF",
+  "Year.Built",
+  "Full.Bath",
+  "Year.Remod.Add")]
+
+summary(numeric_df)
+
+library(psych)
+describe(numeric_df)
+
+hist(df$Gr.Liv.Area)
+hist(df$X1st.Flr.SF)
+hist(df$SalePrice)
+
+ggplot(df, aes(x = Kitchen.Qual, y = SalePrice, fill=Kitchen.Qual)) +
+  geom_boxplot() +
+  labs(
+    title = "Sale Price by Kitchen Quality",
+    x = "Kitchen Quality",
+    y = "Sale Price (USD)"
+  )
+
+ggplot(df, aes(x = Exter.Qual, y = SalePrice, fill=Exter.Qual)) +
+  geom_boxplot() +
+  labs(
+    title = "Sale Price by External Quality",
+    x = "External Quality",
+    y = "Sale Price (USD)"
+  )
+
+ggplot(df, aes(x = factor(Overall.Qual), y = SalePrice, fill=Overall.Qual)) +
+  geom_boxplot() +
+  labs(
+    title = "Sale Price by Overall Quality",
+    x = "Overall Quality",
+    y = "Sale Price (USD)"
+  )
 #----------------------------------------------------------------------------------------------------
 # VARIABLE SELECTION
 # We have too many variables in the dataset, we have to select ~10 

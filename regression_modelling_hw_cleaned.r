@@ -225,10 +225,26 @@ print(vif_outputs)
 
 #Convert categorical variables to factor so R handles dummy encoding
 #automatically reference category is dropped
-final_df$Neighborhood <- relevel(as.factor(final_df$Neighborhood), ref="Other")
+final_df$Neighborhood <- as.factor(final_df$Neighborhood)
 final_df$Exter.Qual   <- as.factor(final_df$Exter.Qual)
 final_df$Kitchen.Qual <- as.factor(final_df$Kitchen.Qual)
 final_df$Overall.Qual <- as.factor(ifelse(final_df$Overall.Qual<=2, 2, final_df$Overall.Qual))
+
+# setting the reference levels
+# we decided that the lowest levels are the refernce levels
+# for neighborhoods, the one with the lowest sales price on average
+aggregate(SalePrice ~ Neighborhood, data = final_df, FUN = mean) # OldTown
+
+final_df$Neighborhood <- relevel(as.factor(final_df$Neighborhood), ref="OldTown")
+
+# for the quality variables the weakest category is obvious
+table(final_df$Exter.Qual)
+table(final_df$Kitchen.Qual)
+# Ex ~ Excellent   Gd ~ Good  TA ~ Average  Fa ~ Fair
+final_df$Exter.Qual <- relevel(as.factor(final_df$Exter.Qual), ref="Fa")
+final_df$Kitchen.Qual <- relevel(as.factor(final_df$Kitchen.Qual), ref="Fa")
+
+                        
 
 #Model1 - Additive baseline (no interaction)
 first_model <- lm(SalePrice ~ Overall.Qual + Gr.Liv.Area + X1st.Flr.SF +
@@ -298,7 +314,7 @@ third_model_reset <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X
 third_reset <- lmtest::waldtest(third_model, third_model_reset, vcov=sandwich::vcovHC(third_model_reset, type = "HC3"))
 
 c(second_reset$`Pr(>F)`, third_reset$`Pr(>F)`)
-# Third model passes the RESET Test
+# Third model fares better in the RESET Test
 # Wald test is not applicable because of difference in scale of target
 # We go by the reset test results
 
@@ -315,7 +331,7 @@ fourth_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.F
                      I(Year.Built^2),data = final_df)
 coeftest(fourth_model, vcov=sandwich::vcovHC(fourth_model, type = "HC3"))
 lmtest::waldtest(fourth_model, third_model, vcov=sandwich::vcovHC(fourth_model, type = "HC3"))
-# p=0.00056 Wald test pefers the extended model
+# p=0.0048 Wald test prefers the extended model
 
 
 final_df$fitted_sq <- fitted(fourth_model)^2
@@ -325,18 +341,19 @@ fourth_reset_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(
                            Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
                            I(Year.Built^2) + fitted_sq + fitted_cb,data = final_df)
 lmtest::waldtest(fourth_reset_model, fourth_model, vcov=sandwich::vcovHC(fourth_reset_model, type = "HC3"))
-# Reset test still passed
+# Reset test still pretty much the same
 
 # Model 5: Exclude non-significant terms
 
 coeftest(fourth_model, vcov=sandwich::vcovHC(fourth_model, type = "HC3"))
-# "Somerst" and "NridgHt" neighborhoods and Full.Bath seem insignificant
+# "BrkSide", "CollgCr","Gilbert", "NWAmes" neighborhoods and Full.Bath seem insignificant
 
 # Exclude the two neighborhoods by stuffing them into "Other"
+final_df$Neighborhood <- final_df$Neighborhood_simple
 final_df$Neighborhood_new <- relevel(as.factor(
-  ifelse(as.character(final_df$Neighborhood) %in% c("Somerst", "NridgHt"), "Other", 
+  ifelse(as.character(final_df$Neighborhood) %in% c("BrkSide", "CollgCr","Gilbert", "NWAmes"), "Other", 
          as.character(final_df$Neighborhood))
-), ref="Other")
+), ref="OldTown")
 final_df$Neighborhood <- final_df$Neighborhood_new
 
 fifth_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
@@ -346,16 +363,8 @@ fifth_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.Fl
 coeftest(fifth_model, vcov=sandwich::vcovHC(fifth_model, type="HC3"))
 # Significances are now largely okay
 lmtest::waldtest(fifth_model, fourth_model, vcov=sandwich::vcovHC(fourth_model, type="HC3"))
-# p=0.1539 Wald test says the exclusions were jointly insignificant
-
-final_df$fitted_sq <- fitted(fifth_model)^2
-final_df$fitted_cb <- fitted(fifth_model)^3
-fifth_reset_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
-                          Year.Built + Year.Remod.Add + Neighborhood + 
-                          Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
-                          I(Year.Built^2) + fitted_sq + fitted_cb,data = final_df)
-lmtest::waldtest(fifth_reset_model, fifth_model, vcov=sandwich::vcovHC(fifth_reset_model, type = "HC3"))
-# Reset test still passes
+# p=0.08514 Wald test not terribly conclusive, but it leans towards them being
+# jointly insignificant
 
 white_test_table <- as.data.frame(model.matrix(fifth_model))[,-1]
 sq_predictors <- white_test_table[,]^2
@@ -371,4 +380,6 @@ fifth_model_gls <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1s
                         Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
                         I(Year.Built^2), weights=1/omega, data = final_df)
 summary(fifth_model_gls)
+
+
 

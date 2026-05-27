@@ -109,8 +109,7 @@ for (numeric_var in names(df_numerical)) {
     formula <- as.formula(paste('SalePrice ~', numeric_var))
     model <- lm(formula, data = df_numerical)
     num_df <- rbind(num_df, data.frame(numeric_var, 
-                                       summary(model)$r.squared),
-                                        summary(model)$coefficients[,4]))
+                                       summary(model)$r.squared))
   }
 }
 
@@ -226,25 +225,10 @@ print(vif_outputs)
 
 #Convert categorical variables to factor so R handles dummy encoding
 #automatically reference category is dropped
-final_df$Neighborhood <- as.factor(final_df$Neighborhood)
+final_df$Neighborhood <- relevel(as.factor(final_df$Neighborhood), ref="Other")
 final_df$Exter.Qual   <- as.factor(final_df$Exter.Qual)
 final_df$Kitchen.Qual <- as.factor(final_df$Kitchen.Qual)
-
-# setting the reference levels
-# we decided that the lowest levels are the refernce levels
-# for neighborhoods, the one with the lowest sales price on average
-aggregate(SalePrice ~ Neighborhood, data = final_df, FUN = mean) # OldTown
-
-final_df$Neighborhood <- relevel(as.factor(final_df$Neighborhood), ref="OldTown")
-
-# for the quality variables the weakest category is obvious
-table(final_df$Exter.Qual)
-table(final_df$Kitchen.Qual)
-# Ex ~ Excellent   Gd ~ Good  TA ~ Average  Fa ~ Fair
-final_df$Exter.Qual <- relevel(as.factor(final_df$Exter.Qual), ref="Fa")
-final_df$Kitchen.Qual <- relevel(as.factor(final_df$Kitchen.Qual), ref="Fa")
-
-                        
+final_df$Overall.Qual <- as.factor(ifelse(final_df$Overall.Qual<=2, 2, final_df$Overall.Qual))
 
 #Model1 - Additive baseline (no interaction)
 first_model <- lm(SalePrice ~ Overall.Qual + Gr.Liv.Area + X1st.Flr.SF +
@@ -377,7 +361,7 @@ white_test_table <- as.data.frame(model.matrix(fifth_model))[,-1]
 sq_predictors <- white_test_table[,]^2
 colnames(sq_predictors) <- paste0(colnames(sq_predictors), "_sq")
 white_test_table <- cbind(white_test_table, sq_predictors)
-white_test_table$sq_errors <- sixth_model$residuals^2
+white_test_table$sq_errors <- fifth_model$residuals^2
 
 gls_helper_reg <- lm(log(sq_errors) ~ ., data = white_test_table)
 omega <- exp(fitted(gls_helper_reg))
@@ -387,45 +371,4 @@ fifth_model_gls <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1s
                         Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
                         I(Year.Built^2), weights=1/omega, data = final_df)
 summary(fifth_model_gls)
-
-# Model 6: Quality as a factor instead of interval scale numeric
-
-final_df$QualFactor <- as.factor(ifelse(final_df$Overall.Qual<=2, 2, final_df$Overall.Qual))
-
-sixth_model <- lm(log(SalePrice) ~ QualFactor + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
-                    Year.Built + Year.Remod.Add + Neighborhood + 
-                    Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
-                    I(Year.Built^2),data = final_df)
-coeffs <- coeftest(sixth_model, vcov=sandwich::vcovHC(sixth_model, type="HC3"))
-coeffs
-
-final_df$fitted_sq <- fitted(sixth_model)^2
-final_df$fitted_cb <- fitted(sixth_model)^3
-sixth_reset_model <- lm(log(SalePrice) ~ QualFactor + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
-                          Year.Built + Year.Remod.Add + Neighborhood + 
-                          Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
-                          I(Year.Built^2) + fitted_sq + fitted_cb,data = final_df)
-lmtest::waldtest(sixth_reset_model, sixth_model, vcov=sandwich::vcovHC(sixth_reset_model, type = "HC3"))
-
-coef_df <- as.data.frame(3:10)
-colnames(coef_df) <- c("quality")
-coef_df$coeffs <- coeffs[2:9]
-
-ggplot(coef_df, aes(x=quality, y=coeffs)) + geom_point() + stat_smooth(method=lm)
-
-white_test_table <- as.data.frame(model.matrix(sixth_model))[,-1]
-sq_predictors <- white_test_table[,]^2
-colnames(sq_predictors) <- paste0(colnames(sq_predictors), "_sq")
-white_test_table <- cbind(white_test_table, sq_predictors)
-white_test_table$sq_errors <- sixth_model$residuals^2
-
-gls_helper_reg <- lm(log(sq_errors) ~ ., data = white_test_table)
-omega <- exp(fitted(gls_helper_reg))
-
-sixth_model_gls <- lm(log(SalePrice) ~ QualFactor + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
-                        Year.Built + Year.Remod.Add + Neighborhood + 
-                        Exter.Qual + Kitchen.Qual + Neighborhood * log(Gr.Liv.Area) +
-                        I(Year.Built^2), weights=1/omega, data = final_df)
-summary(sixth_model_gls)
-
 

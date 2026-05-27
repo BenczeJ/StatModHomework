@@ -1,5 +1,5 @@
 df <- read.csv("AmesHousing.csv")
-n <- nrow(df) # total number of observations -> 2930
+n <- nrow(df) # total number of variables -> 2930
 #----------------------------------------------------------------------------------------------------
 # VARIABLE SELECTION
 # We have too many variables in the dataset, we have to select ~10 
@@ -253,7 +253,7 @@ second_model_reset <- lm(SalePrice ~ Overall.Qual + Gr.Liv.Area + X1st.Flr.SF +
                            Year.Built + Full.Bath + Year.Remod.Add + Neighborhood + 
                            Exter.Qual + Kitchen.Qual + Neighborhood * Gr.Liv.Area +
                            fitted_sq + fitted_cb ,data = final_df)
-lmtest::waldtest(second_model, second_model_reset, vcov=sandwich::vcovHC(second_model_reset, type="HC3"))
+second_reset <- lmtest::waldtest(second_model, second_model_reset, vcov=sandwich::vcovHC(second_model_reset, type="HC3"))
 
 summary(second_model)
 coeftest(second_model, vcov=hccm(second_model))
@@ -268,6 +268,16 @@ hist(final_df$Gr.Liv.Area)
 hist(final_df$X1st.Flr.SF)
 #histogram of SalePrice and numerical predictors (Gr.Liv.Area, X1st.Flr.SF) show long right tails
 
+ggplot(final_df, aes(x=Gr.Liv.Area, y = SalePrice)) + geom_point() + 
+  geom_smooth(method = lm) + geom_smooth(color="red")
+ggplot(final_df, aes(x=log(Gr.Liv.Area), y = log(SalePrice))) + geom_point() + 
+  geom_smooth(method = lm) + geom_smooth(color="red")
+
+ggplot(final_df, aes(x=X1st.Flr.SF, y = SalePrice)) + geom_point() + 
+  geom_smooth(method = lm) + geom_smooth(color="red")
+ggplot(final_df, aes(x=log(X1st.Flr.SF), y = log(SalePrice))) + geom_point() + 
+  geom_smooth(method = lm) + geom_smooth(color="red")
+
 third_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
                             Year.Built + Full.Bath + Year.Remod.Add + Neighborhood + 
                             Exter.Qual + Kitchen.Qual + Neighborhood * Gr.Liv.Area,data = final_df)
@@ -281,10 +291,15 @@ third_model_reset <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X
                           Year.Built + Full.Bath + Year.Remod.Add + Neighborhood + 
                           Exter.Qual + Kitchen.Qual + Neighborhood * Gr.Liv.Area +
                           fitted_sq + fitted_cb ,data = final_df)
-lmtest::waldtest(third_model, third_model_reset, vcov=sandwich::vcovHC(third_model_reset, type = "HC3"))
+third_reset <- lmtest::waldtest(third_model, third_model_reset, vcov=sandwich::vcovHC(third_model_reset, type = "HC3"))
 
+c(second_reset$`Pr(>F)`, third_reset$`Pr(>F)`)
+# Third passes the RESET Test
 
 #Model4 - Squared term
+
+ggplot(final_df, aes(x = Year.Built, y = log(SalePrice))) +
+  geom_point() + geom_smooth(method = lm) + geom_smooth(color = 'red')
 
 fourth_model <- lm(log(SalePrice) ~ Overall.Qual + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
                      Year.Built + Full.Bath + Year.Remod.Add + Neighborhood + 
@@ -324,5 +339,25 @@ sixth_model <- lm(log(SalePrice) ~ QualFactor + log(Gr.Liv.Area) + log(X1st.Flr.
                     Year.Built + Year.Remod.Add + Neighborhood + 
                     Exter.Qual + Kitchen.Qual + Neighborhood * Gr.Liv.Area +
                     I(Year.Built^2),data = final_df)
-coeftest(sixth_model, vcov=sandwich::vcovHC(sixth_model, type="HC3"))
+coeffs <- coeftest(sixth_model, vcov=sandwich::vcovHC(sixth_model, type="HC3"))
+coeffs
 
+# coef_df <- as.data.frame(2:10)
+# colnames(coef_df) <- c("quality")
+# coef_df$coeffs <- coeffs[2:10]
+
+white_test_table <- as.data.frame(model.matrix(sixth_model))[,-1]
+sq_predictors <- white_test_table[,]^2
+colnames(sq_predictors) <- paste0(colnames(sq_predictors), "_sq")
+white_test_table <- cbind(white_test_table, sq_predictors)
+white_test_table$sq_errors <- sixth_model$residuals^2
+
+gls_helper_reg <- lm(log(sq_errors) ~ ., data = white_test_table)
+omega <- exp(fitted(gls_helper_reg))
+
+sixth_model_gls <- lm(log(SalePrice) ~ QualFactor + log(Gr.Liv.Area) + log(X1st.Flr.SF) +
+                        Year.Built + Year.Remod.Add + Neighborhood + 
+                        Exter.Qual + Kitchen.Qual + Neighborhood * Gr.Liv.Area +
+                        I(Year.Built^2), weights=1/omega, data = final_df)
+
+summary(sixth_model_gls)
